@@ -1,0 +1,100 @@
+# Virtual Environments & Dependencies
+venv/
+env/
+.venv/
+.kubeflow-pipe-line/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.Python
+dist/
+build/
+*.egg-info/
+site-packages/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# SSH keys & Certificates
+*.pem
+*.key
+*.ppk
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.keytab
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfvars
+*.tfvars
+.terraform.lock.hcl
+
+# Secrets & Environment
+.env
+.env.*
+*.env
+credentials/
+secrets/
+**/credentials.json
+**/service-account.json
+**/kubeconfig
+**/.kube/config
+*.secret
+*secret*.yaml
+
+# Kubernetes
+*.kubeconfig
+kubeconfig*
+
+# Docker
+docker-compose.override.yml
+
+# Cloud Provider
+.gcloud/
+.aws/
+.azure/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# ML Models
+*.h5
+*.pkl
+*.pickle
+*.joblib
+*.pt
+*.pth
+*.onnx
+models/
+*.sav
+
+# Archives
+*.tar.gz
+*.zip
+*.rar
+*.7z
+*.tar
+
