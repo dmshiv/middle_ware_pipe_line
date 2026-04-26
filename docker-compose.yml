@@ -1,0 +1,525 @@
+# =============================================================================
+# DOCKER COMPOSE — Full Fraud Detection Pipeline Stack
+# =============================================================================
+#
+# SERVICES (10 containers):
+#
+#   INFRASTRUCTURE:
+#     1. zookeeper        — Kafka coordination (required by Kafka)
+#     2. kafka            — Event streaming backbone (all data flows through here)
+#     3. hazelcast-1      — Distributed cache node 1 (blocklist + merchant cache)
+#     4. hazelcast-2      — Distributed cache node 2 (HA — survives 1 node failure)
+#
+#   APPLICATION:
+#     5. simulator        — Transaction generator (Python — produces to Kafka)
+#     6. enrichment       — Hazelcast lookup + enrichment (Python — consumes/produces Kafka)
+#     7. flink-jobmanager — Flink master (coordinates tasks, manages checkpoints)
+#     8. flink-taskmanager— Flink worker (runs the actual fraud detection logic)
+#
+#   OBSERVABILITY (ELK):
+#     9. elasticsearch    — Search engine + analytics store (transaction + alert indices)
+#    10. logstash         — Data pipeline (Kafka → transform → Elasticsearch)
+#    11. kibana           — Visualization dashboards (fraud maps, alert feeds)
+#
+# STARTUP ORDER (depends_on with health checks):
+#   zookeeper → kafka → hazelcast → enrichment → simulator
+#                   ↘ elasticsearch → logstash → kibana
+#                   ↘ flink-jobmanager → flink-taskmanager
+#
+# NETWORKS:
+#   All services on "fraud-network" (Docker bridge network)
+#   Services communicate by container name (e.g., "kafka:9092")
+#
+# =============================================================================
+
+version: "3.8"
+
+# ─── SHARED NETWORK ─────────────────────────────────────────────────────────
+networks:
+  fraud-network:
+    driver: bridge
+    name: visa-fraud-network
+
+# ─── NAMED VOLUMES ──────────────────────────────────────────────────────────
+# Persistent storage for stateful services (survives container restarts)
+volumes:
+  elasticsearch-data:    # Transaction + alert indices
+  kafka-data:            # Kafka message logs
+
+services:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ZOOKEEPER — Kafka Coordination Service
+  # ═══════════════════════════════════════════════════════════════════════════
+  # WHY: Kafka requires Zookeeper for broker coordination, topic metadata,
+  # and consumer group management. (KRaft mode removes this need in Kafka 4.0)
+  # ═══════════════════════════════════════════════════════════════════════════
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    hostname: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # KAFKA — Event Streaming Platform
+  # ═══════════════════════════════════════════════════════════════════════════
+  # THE BACKBONE of this entire pipeline. Every transaction flows through Kafka:
+  #   Simulator → transactions.raw → Enrichment → transactions.enriched → Flink
+  #                                                                    ↓
+  #   Logstash ← transactions.alerts ← Flink fraud detection
+  #
+  # WHY KAFKA (not RabbitMQ/SQS):
+  #   1. LOG-BASED: Messages are persisted. Can replay from any offset.
+  #   2. CONSUMER GROUPS: Multiple independent consumers (Flink, Logstash, etc.)
+  #   3. PARTITIONING: Key-based partitioning ensures per-card ordering
+  #   4. THROUGHPUT: Handles 1M+ messages/sec (Visa-scale)
+  # ═══════════════════════════════════════════════════════════════════════════
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    hostname: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Two listeners: one for internal Docker communication, one for host access
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Auto-create topics (convenient for development)
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Log retention: 24 hours (sufficient for streaming — not long-term storage)
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824  # 1GB segments
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # HAZELCAST NODE 1 — Distributed In-Memory Data Grid
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PRIMARY USE CASES:
+  #   1. Hot Card Blocklist: <5ms lookup for stolen/compromised cards
+  #   2. Merchant Registry: Cached merchant details for enrichment
+  #   3. Velocity Counter: Track txn count per card (pre-Flink check)
+  #
+  # WHY 2 NODES:
+  #   High Availability. If node-1 crashes, node-2 has a backup copy of all data.
+  #   Hazelcast auto-rebalances partitions when a node joins/leaves.
+  #
+  # WHY HAZELCAST (not just Redis):
+  #   - Near Cache with server-push invalidation (blocklist instant propagation)
+  #   - EntryListeners (event-driven, not poll-based)
+  #   - Native Java client (runs inside Flink if needed)
+  #   - Management Center UI (visual cluster monitoring)
+  # ═══════════════════════════════════════════════════════════════════════════
+  hazelcast-1:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast-1
+    hostname: hazelcast-1
+    ports:
+      - "5701:5701"
+    environment:
+      JAVA_OPTS: "-Xms256m -Xmx256m -Dhazelcast.config=/opt/hazelcast/config/hazelcast.yaml"
+    volumes:
+      - ./hazelcast/hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z $(hostname) 5701 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  hazelcast-2:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast-2
+    hostname: hazelcast-2
+    ports:
+      - "5702:5701"
+    environment:
+      JAVA_OPTS: "-Xms256m -Xmx256m -Dhazelcast.config=/opt/hazelcast/config/hazelcast.yaml"
+    volumes:
+      - ./hazelcast/hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z $(hostname) 5701 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # HAZELCAST MANAGEMENT CENTER — Web UI for cluster monitoring
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Provides visual dashboards for:
+  #   - Map sizes (how many blocked cards, merchants cached)
+  #   - Operations/sec (get, put, remove per second)
+  #   - Memory usage per node
+  #   - Cluster member health
+  # ═══════════════════════════════════════════════════════════════════════════
+  hazelcast-mc:
+    image: hazelcast/management-center:5.3
+    container_name: hazelcast-mc
+    hostname: hazelcast-mc
+    ports:
+      - "8085:8080"
+    environment:
+      MC_DEFAULT_CLUSTER: visa-fraud-cluster
+      MC_DEFAULT_CLUSTER_MEMBERS: hazelcast-1:5701,hazelcast-2:5701
+    depends_on:
+      hazelcast-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ELASTICSEARCH — Search & Analytics Engine
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Stores:
+  #   - transactions-*: All enriched transactions (date-based indices)
+  #   - fraud-alerts: All fraud alerts from Flink
+  #   - transaction-aggregations-*: 5-min aggregated stats
+  #
+  # WHY ELASTICSEARCH (not PostgreSQL for analytics):
+  #   1. Full-text search: Find transactions by merchant name, city, etc.
+  #   2. Aggregation engine: Real-time stats (avg, percentile, histogram)
+  #   3. Kibana integration: Pre-built visualization ecosystem
+  #   4. Geo-queries: "Show all transactions within 50km of this ATM"
+  #   5. ILM: Automatic index lifecycle (hot → warm → delete)
+  # ═══════════════════════════════════════════════════════════════════════════
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    hostname: elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node        # Single node for local dev
+      - xpack.security.enabled=false      # Disable auth for local dev
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"     # 512MB heap (reduced for dev; production: 16-32GB)
+      - cluster.name=visa-fraud-cluster
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # LOGSTASH — Data Processing Pipeline
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Sits between Kafka and Elasticsearch.
+  # - Consumes from 4 Kafka topics
+  # - PCI-DSS masks card numbers
+  # - Adds geo_point fields for Kibana maps
+  # - Routes to correct Elasticsearch index
+  # ═══════════════════════════════════════════════════════════════════════════
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: logstash
+    hostname: logstash
+    ports:
+      - "5044:5044"
+      - "9600:9600"    # Logstash monitoring API
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+    volumes:
+      - ./elk/logstash/pipeline:/usr/share/logstash/pipeline:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9600/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # KIBANA — Visualization & Dashboard UI
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Pre-configured dashboards:
+  #   1. Live Transaction Map — Global heatmap of transactions
+  #   2. Fraud Alert Feed — Real-time alert stream
+  #   3. Transaction Volume — Time-series charts
+  #   4. Risk Score Distribution — Histogram of risk scores
+  #   5. Country Analytics — Per-country transaction stats
+  # ═══════════════════════════════════════════════════════════════════════════
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    hostname: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=false
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q 'available'"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # FLINK JOB MANAGER — Stream Processing Coordinator
+  # ═══════════════════════════════════════════════════════════════════════════
+  # The "brain" of Flink. Responsible for:
+  #   - Scheduling tasks across TaskManagers
+  #   - Managing checkpoints (exactly-once processing)
+  #   - Job DAG optimization
+  #   - REST API for job submission + monitoring
+  #
+  # Web UI: http://localhost:8081 (view jobs, tasks, checkpoints, metrics)
+  # ═══════════════════════════════════════════════════════════════════════════
+  flink-jobmanager:
+    image: flink:1.20.3-java17
+    hostname: flink-jobmanager
+    ports:
+      - "8081:8081"     # Flink Web UI
+      - "9249:9249"     # Prometheus metrics
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
+        state.backend: hashmap
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        execution.checkpointing.interval: 30000
+        restart-strategy: fixed-delay
+        restart-strategy.fixed-delay.attempts: 10
+        restart-strategy.fixed-delay.delay: 15s
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9249
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    volumes:
+      - ./flink-jobs/target:/opt/flink/usrlib:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/overview || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # FLINK TASK MANAGER — Stream Processing Worker
+  # ═══════════════════════════════════════════════════════════════════════════
+  # The "hands" of Flink. Actually executes the fraud detection operators:
+  #   - Kafka source (reads enriched transactions)
+  #   - Window operators (tumbling, sliding)
+  #   - CEP pattern matching (geo-hopping detection)
+  #   - Kafka sink (writes alerts + aggregations)
+  #
+  # TASK SLOTS: 4 per TaskManager
+  #   Each slot can run one parallel instance of an operator.
+  #   4 slots × 1 TaskManager = 4 parallel pipelines
+  #   In production: 4 slots × 8 TaskManagers = 32 parallel pipelines
+  # ═══════════════════════════════════════════════════════════════════════════
+  flink-taskmanager:
+    image: flink:1.20.3-java17
+    hostname: flink-taskmanager
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        taskmanager.memory.process.size: 1024m
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9249
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    volumes:
+      - ./flink-jobs/target:/opt/flink/usrlib:ro
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://flink-jobmanager:8081/taskmanagers 2>/dev/null | grep -q '\"taskmanagers\"' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # TRANSACTION SIMULATOR — Generates Realistic Card Transactions
+  # ═══════════════════════════════════════════════════════════════════════════
+  simulator:
+    build:
+      context: ./simulator
+      dockerfile: Dockerfile
+    container_name: transaction-simulator
+    hostname: simulator
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      TXN_RATE: "10"              # 10 transactions/sec for local dev
+      FRAUD_RATIO: "0.05"         # 5% suspicious (higher for testing visibility)
+      BLOCKED_RATIO: "0.03"       # 3% blocked cards
+    depends_on:
+      kafka:
+        condition: service_healthy
+      enrichment:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ENRICHMENT SERVICE — Hazelcast Blocklist Check + Data Enrichment
+  # ═══════════════════════════════════════════════════════════════════════════
+  enrichment:
+    build:
+      context: ./enrichment
+      dockerfile: Dockerfile
+    container_name: enrichment-service
+    hostname: enrichment
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      HAZELCAST_HOST: hazelcast-1
+      HAZELCAST_PORT: "5701"
+      INPUT_TOPIC: transactions.raw
+      OUTPUT_TOPIC: transactions.enriched
+      BLOCKED_TOPIC: transactions.blocked
+    depends_on:
+      kafka:
+        condition: service_healthy
+      hazelcast-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PROMETHEUS — Metrics Collection & Alerting
+  # ═══════════════════════════════════════════════════════════════════════════
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    hostname: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
+    networks:
+      - fraud-network
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # GRAFANA — Monitoring Dashboards
+  # ═══════════════════════════════════════════════════════════════════════════
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    hostname: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: on-failure
+    networks:
+      - fraud-network

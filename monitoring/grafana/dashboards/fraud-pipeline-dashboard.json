@@ -1,0 +1,279 @@
+{
+  "id": null,
+  "uid": "visa-fraud-pipeline",
+  "title": "Visa Fraud Detection Pipeline",
+  "tags": [
+    "visa",
+    "fraud",
+    "middleware",
+    "pipeline"
+  ],
+  "timezone": "UTC",
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Service Health",
+      "type": "stat",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "legendFormat": "{{job}} ({{component}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Flink \u2014 Records In Per Second (all tasks)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(flink_taskmanager_job_task_numRecordsIn[1m]))",
+          "legendFormat": "Records In/sec"
+        },
+        {
+          "expr": "sum(rate(flink_taskmanager_job_task_numRecordsOut[1m]))",
+          "legendFormat": "Records Out/sec"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Flink \u2014 Total Records Processed",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(flink_taskmanager_job_task_numRecordsIn)",
+          "legendFormat": "Records In"
+        },
+        {
+          "expr": "sum(flink_taskmanager_job_task_numRecordsOut)",
+          "legendFormat": "Records Out"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Flink \u2014 Job Uptime",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "flink_jobmanager_job_uptime / 1000",
+          "legendFormat": "Uptime"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Flink \u2014 Checkpoint Duration (ms)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "flink_jobmanager_job_lastCheckpointDuration",
+          "legendFormat": "Last Checkpoint Duration"
+        },
+        {
+          "expr": "flink_jobmanager_job_lastCheckpointSize",
+          "legendFormat": "Last Checkpoint Size (bytes)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Flink \u2014 Number of Restarts",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "flink_jobmanager_job_numRestarts",
+          "legendFormat": "Restarts"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Flink \u2014 JVM Heap Memory (JobManager)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "flink_jobmanager_Status_JVM_Memory_Heap_Used",
+          "legendFormat": "Heap Used"
+        },
+        {
+          "expr": "flink_jobmanager_Status_JVM_Memory_Heap_Max",
+          "legendFormat": "Heap Max"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Flink \u2014 JVM Heap Memory (TaskManager)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "targets": [
+        {
+          "expr": "flink_taskmanager_Status_JVM_Memory_Heap_Used",
+          "legendFormat": "Heap Used"
+        },
+        {
+          "expr": "flink_taskmanager_Status_JVM_Memory_Heap_Max",
+          "legendFormat": "Heap Max"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Flink \u2014 JVM CPU Load",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "targets": [
+        {
+          "expr": "flink_jobmanager_Status_JVM_CPU_Load",
+          "legendFormat": "JobManager CPU"
+        },
+        {
+          "expr": "flink_taskmanager_Status_JVM_CPU_Load",
+          "legendFormat": "TaskManager CPU"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        }
+      }
+    }
+  ]
+}

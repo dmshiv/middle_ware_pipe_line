@@ -1,0 +1,124 @@
+# =============================================================================
+# HAZELCAST SERVER CONFIGURATION — hazelcast.yaml
+# =============================================================================
+#
+# WHY HAZELCAST (not Redis) for this use case:
+#
+#   1. NEAR CACHE: Client-side caching with server-push invalidation.
+#      When card 4111... is added to blocklist on Node-1, ALL clients
+#      (enrichment services) get their local Near Cache invalidated instantly.
+#      Redis doesn't have this — you'd need to poll or use Pub/Sub manually.
+#
+#   2. ENTRY LISTENERS: Event-driven callbacks when map entries change.
+#      "Card blocked → fire event → all nodes reject it in <5ms"
+#
+#   3. DISTRIBUTED COMPUTING: Run code ON the cluster (EntryProcessor).
+#      Example: "Update all merchants in category X" runs server-side,
+#      not over the network. Saves bandwidth at Visa scale.
+#
+#   4. MULTI-DATA-STRUCTURE: IMap, IQueue, ISet, ITopic — all in one cluster.
+#      Redis has these too, but Hazelcast's Java-native API is richer.
+#
+# CLUSTER SETUP:
+#   - 2 nodes (hazelcast-1, hazelcast-2) for high availability
+#   - TCP/IP discovery (not multicast — predictable in Docker/K8s)
+#   - SSL/TLS in production (commented out for local dev)
+#   - Management Center enabled for UI monitoring
+#
+# =============================================================================
+
+hazelcast:
+  # ─── CLUSTER NAME ─────────────────────────────────────────────────────
+  # All nodes with same cluster-name auto-join the same cluster
+  cluster-name: visa-fraud-cluster
+
+  # ─── NETWORK CONFIG ───────────────────────────────────────────────────
+  network:
+    port:
+      auto-increment: true
+      port-count: 100
+      port: 5701
+    join:
+      # Disable multicast (unpredictable in Docker networking)
+      multicast:
+        enabled: false
+      # Use TCP/IP — explicitly list cluster members
+      tcp-ip:
+        enabled: true
+        member-list:
+          - hazelcast-1
+          - hazelcast-2
+
+  # ─── MAP CONFIGURATIONS ───────────────────────────────────────────────
+  map:
+    # HOT CARD BLOCKLIST — The most critical data structure
+    # Cards reported stolen, compromised, or flagged by fraud detection
+    hot-card-blocklist:
+      # Keep in memory forever (blocklist entries don't expire by default)
+      time-to-live-seconds: 0
+      # Evict least-recently-used if memory pressure (shouldn't happen for blocklist)
+      eviction:
+        eviction-policy: LRU
+        max-size-policy: PER_NODE
+        size: 100000  # 100K blocked cards per node
+      # Backup on second node — if node-1 dies, blocklist survives
+      backup-count: 1
+      # Async backup for performance (eventual consistency is fine for blocklist additions)
+      async-backup-count: 0
+      # Enable Near Cache invalidation events
+      # WHY: When card is blocked, ALL clients must invalidate their local cache
+      per-entry-stats-enabled: true
+
+    # MERCHANT REGISTRY — Cached merchant details
+    # Read-heavy, write-light (perfect for distributed cache)
+    merchant-registry:
+      time-to-live-seconds: 3600      # Refresh hourly
+      max-idle-seconds: 1800           # Evict if not accessed for 30 min
+      eviction:
+        eviction-policy: LFU           # Least-frequently-used (popular merchants stay)
+        max-size-policy: PER_NODE
+        size: 50000                    # 50K merchants per node
+      backup-count: 1
+      per-entry-stats-enabled: true
+
+    # VELOCITY COUNTER — Track transaction count per card
+    # Used by enrichment service for quick pre-Flink velocity checks
+    velocity-counter:
+      time-to-live-seconds: 300        # Auto-expire after 5 minutes
+      max-idle-seconds: 120
+      eviction:
+        eviction-policy: LRU
+        max-size-policy: PER_NODE
+        size: 200000                   # 200K active cards
+      backup-count: 1
+
+
+  # ─── MANAGEMENT CENTER ────────────────────────────────────────────────
+  # Web UI for cluster monitoring (maps, members, operations/sec)
+  management-center:
+    scripting-enabled: false           # Disable for security
+
+  # ─── METRICS ──────────────────────────────────────────────────────────
+  # Export metrics to Prometheus (scraping endpoint on port 8081)
+  metrics:
+    enabled: true
+    management-center:
+      enabled: true
+    jmx:
+      enabled: true
+
+  # ─── SSL/TLS CONFIG (PRODUCTION) ──────────────────────────────────────
+  # Uncomment for production deployment with mutual TLS
+  # WHY: Visa requires all inter-service communication to be encrypted.
+  # Hazelcast supports mutual TLS (both client and server verify each other).
+  #
+  # network:
+  #   ssl:
+  #     enabled: true
+  #     properties:
+  #       keyStore: /opt/hazelcast/certs/keystore.jks
+  #       keyStorePassword: ${HZ_KEYSTORE_PASSWORD}  # From K8s Secret
+  #       trustStore: /opt/hazelcast/certs/truststore.jks
+  #       trustStorePassword: ${HZ_TRUSTSTORE_PASSWORD}
+  #       protocol: TLSv1.3
+  #       mutualAuthentication: REQUIRED  # Both sides verify certificates

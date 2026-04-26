@@ -1,0 +1,119 @@
+{
+  "_comment": "══════════════════════════════════════════════════════════════════",
+  "_comment2": "ELASTICSEARCH INDEX TEMPLATES — Define field mappings for each index",
+  "_comment3": "══════════════════════════════════════════════════════════════════",
+  "_comment4": "WHY INDEX TEMPLATES:",
+  "_comment5": "  Without templates, Elasticsearch auto-detects field types (dynamic mapping).",
+  "_comment6": "  This causes problems: 'amount' might be mapped as long instead of double,",
+  "_comment7": "  'location' as object instead of geo_point, etc.",
+  "_comment8": "  Templates define the correct mapping BEFORE data is indexed.",
+  "_comment9": "══════════════════════════════════════════════════════════════════",
+
+  "transactions_template": {
+    "index_patterns": ["transactions-*"],
+    "template": {
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0,
+        "index.lifecycle.name": "transactions-ilm-policy",
+        "index.lifecycle.rollover_alias": "transactions"
+      },
+      "mappings": {
+        "properties": {
+          "transaction_id": { "type": "keyword" },
+          "card_number": { "type": "keyword" },
+          "masked_card": { "type": "keyword" },
+          "card_holder": { "type": "keyword" },
+          "card_type": { "type": "keyword" },
+          "amount": { "type": "double" },
+          "currency": { "type": "keyword" },
+          "merchant_id": { "type": "keyword" },
+          "merchant_name": { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+          "merchant_category": { "type": "keyword" },
+          "mcc": { "type": "keyword" },
+          "country": { "type": "keyword" },
+          "city": { "type": "text", "fields": { "keyword": { "type": "keyword" } } },
+          "location": { "type": "geo_point" },
+          "transaction_type": { "type": "keyword" },
+          "channel": { "type": "keyword" },
+          "risk_flag": { "type": "keyword" },
+          "is_international": { "type": "boolean" },
+          "amount_bucket": { "type": "keyword" },
+          "hour_of_day": { "type": "integer" },
+          "timestamp": { "type": "date" },
+          "event_time": { "type": "long" },
+          "enrichment": {
+            "type": "object",
+            "properties": {
+              "blocked": { "type": "boolean" },
+              "risk_score": { "type": "double" },
+              "risk_level": { "type": "keyword" },
+              "country_risk_tier": { "type": "keyword" },
+              "country_risk_multiplier": { "type": "double" },
+              "region": { "type": "keyword" },
+              "merchant_verified": { "type": "boolean" },
+              "merchant_fraud_rate": { "type": "double" },
+              "block_check_latency_ms": { "type": "double" }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "fraud_alerts_template": {
+    "index_patterns": ["fraud-alerts*"],
+    "template": {
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0
+      },
+      "mappings": {
+        "properties": {
+          "alert_type": { "type": "keyword" },
+          "severity": { "type": "keyword" },
+          "card_number": { "type": "keyword" },
+          "transaction_count": { "type": "integer" },
+          "transaction_amount": { "type": "double" },
+          "total_amount": { "type": "double" },
+          "rolling_average": { "type": "double" },
+          "anomaly_factor": { "type": "double" },
+          "first_country": { "type": "keyword" },
+          "second_country": { "type": "keyword" },
+          "recommended_action": { "type": "keyword" },
+          "alert_status": { "type": "keyword" },
+          "investigated": { "type": "boolean" },
+          "detected_at": { "type": "long" },
+          "window_start": { "type": "long" },
+          "window_end": { "type": "long" }
+        }
+      }
+    }
+  },
+
+  "aggregations_template": {
+    "index_patterns": ["transaction-aggregations-*"],
+    "template": {
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0
+      },
+      "mappings": {
+        "properties": {
+          "aggregation_type": { "type": "keyword" },
+          "country": { "type": "keyword" },
+          "transaction_count": { "type": "integer" },
+          "total_amount": { "type": "double" },
+          "average_amount": { "type": "double" },
+          "max_transaction": { "type": "double" },
+          "unique_cards": { "type": "long" },
+          "high_risk_count": { "type": "long" },
+          "high_risk_percentage": { "type": "double" },
+          "window_start": { "type": "long" },
+          "window_end": { "type": "long" },
+          "generated_at": { "type": "long" }
+        }
+      }
+    }
+  }
+}

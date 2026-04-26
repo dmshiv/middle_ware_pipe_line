@@ -1,0 +1,59 @@
+# =============================================================================
+# PROMETHEUS ALERT RULES — Pipeline Health Alerts
+# =============================================================================
+# These rules use only metrics that are actually available from Flink's
+# built-in PrometheusReporter and Prometheus self-monitoring.
+# =============================================================================
+groups:
+  - name: fraud_pipeline_alerts
+    rules:
+
+      # ─── SERVICE DOWN ───────────────────────────────────────────
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.job }} ({{ $labels.instance }}) has been unreachable for >1 minute."
+
+      # ─── FLINK JOB DOWN ────────────────────────────────────────
+      - alert: FlinkJobDown
+        expr: flink_jobmanager_job_uptime == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Flink fraud detection job is down"
+          description: "The Flink fraud detection pipeline has been down for >2 minutes."
+
+      # ─── FLINK CHECKPOINT FAILURES ─────────────────────────────
+      - alert: FlinkCheckpointFailing
+        expr: increase(flink_jobmanager_job_numberOfFailedCheckpoints[5m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Flink checkpoints are failing"
+          description: "More than 3 checkpoint failures in 5 minutes."
+
+      # ─── FLINK JOB RESTARTED ───────────────────────────────────
+      - alert: FlinkJobRestarted
+        expr: flink_jobmanager_job_numRestarts > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Flink job has restarted"
+          description: "The Flink job has restarted {{ $value }} time(s). Check for errors."
+
+      # ─── HIGH JVM HEAP USAGE ────────────────────────────────────
+      - alert: FlinkHighHeapUsage
+        expr: flink_taskmanager_Status_JVM_Memory_Heap_Used / flink_taskmanager_Status_JVM_Memory_Heap_Max > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Flink TaskManager heap usage >90%"
+          description: "TaskManager JVM heap is at {{ $value | humanizePercentage }}. Risk of OOM."

@@ -1,0 +1,9 @@
+com/visa/fraud/utils/TransactionDeserializer.class
+com/visa/fraud/jobs/FraudDetectionPipeline.class
+com/visa/fraud/jobs/FraudDetectionPipeline$5.class
+com/visa/fraud/models/Transaction.class
+com/visa/fraud/jobs/FraudDetectionPipeline$3.class
+com/visa/fraud/jobs/FraudDetectionPipeline$4.class
+com/visa/fraud/jobs/FraudDetectionPipeline$1.class
+com/visa/fraud/jobs/FraudDetectionPipeline$6.class
+com/visa/fraud/jobs/FraudDetectionPipeline$2.class

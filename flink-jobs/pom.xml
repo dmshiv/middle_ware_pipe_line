@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+=============================================================================
+APACHE FLINK FRAUD DETECTION — Maven Build Configuration (pom.xml)
+=============================================================================
+
+WHY FLINK IN JAVA (not Python):
+  1. Flink's Java API is the primary/most complete API
+  2. CEP (Complex Event Processing) library is Java-only
+  3. Production Flink deployments at Visa/Netflix/Alibaba are all Java
+  4. Shows bilingual skills (Python for services, Java for stream processing)
+
+WHY MAVEN:
+  Maven is Flink's official build system. The flink-quickstart archetype
+  generates Maven projects. Gradle works too, but Maven is standard.
+
+BUILD & RUN:
+  mvn clean package -DskipTests
+  This creates: target/fraud-detection-1.0.jar (fat JAR with all dependencies)
+  Submit to Flink cluster: flink run fraud-detection-1.0.jar
+=============================================================================
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.visa.fraud</groupId>
+    <artifactId>fraud-detection</artifactId>
+    <version>1.0</version>
+    <packaging>jar</packaging>
+    <name>Visa Fraud Detection Pipeline</name>
+
+    <properties>
+        <flink.version>1.20.3</flink.version>
+        <kafka.version>3.7.0</kafka.version>
+        <java.version>17</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <!-- ═══════════════════════════════════════════════════════════════
+             FLINK CORE — Stream processing runtime
+             WHY: This IS the stream processing engine. Provides DataStream API,
+             windowing, watermarks, event-time processing, checkpointing.
+             ═══════════════════════════════════════════════════════════════ -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope> <!-- Provided by Flink cluster at runtime -->
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-clients</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             FLINK KAFKA CONNECTOR — Read from / write to Kafka topics
+             WHY: Our entire pipeline is Kafka-based. This connector provides
+             exactly-once semantics with Kafka transactions + Flink checkpoints.
+             ═══════════════════════════════════════════════════════════════ -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-kafka</artifactId>
+            <version>3.4.0-1.20</version>
+        </dependency>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             FLINK CEP — Complex Event Processing
+             WHY: Pattern detection is the killer feature for fraud detection.
+             CEP lets us define patterns like:
+               "Same card used in 2 different countries within 10 minutes"
+             This is how Visa detects geo-hopping attacks in real-time.
+             ═══════════════════════════════════════════════════════════════ -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-cep</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             JACKSON — JSON serialization/deserialization
+             WHY: Transaction events are JSON in Kafka. Jackson parses them
+             into Java POJOs (Transaction.java) for type-safe processing.
+             ═══════════════════════════════════════════════════════════════ -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.16.1</version>
+        </dependency>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             SLF4J + LOG4J — Logging
+             WHY: Flink uses SLF4J internally. Log4j2 is the implementation.
+             slf4j-api must be compile scope so source files can import Logger.
+             ═══════════════════════════════════════════════════════════════ -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.36</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>2.22.1</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.22.1</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.22.1</version>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- ═══════════════════════════════════════════════════════════
+                 SHADE PLUGIN — Creates a fat/uber JAR
+                 WHY: Flink jobs are submitted as a single JAR file.
+                 This plugin bundles ALL dependencies (Kafka connector, CEP,
+                 Jackson) into one JAR that the Flink cluster can execute.
+                 ═══════════════════════════════════════════════════════════ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>org.apache.flink:flink-shaded-force-shading</exclude>
+                                    <exclude>com.google.code.findbugs:jsr305</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.visa.fraud.jobs.FraudDetectionPipeline</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,52 @@
+# =============================================================================
+# PROMETHEUS — Metrics Collection Configuration
+# =============================================================================
+# Scrapes metrics from all pipeline services for monitoring and alerting.
+#
+# TARGETS:
+#   - Kafka (JMX Exporter) — broker metrics, consumer lag, partition health
+#   - Flink (built-in Prometheus reporter) — job throughput, latency, checkpoints
+#   - Hazelcast (Management Center metrics) — map sizes, operations/sec
+#   - Elasticsearch (Elasticsearch Exporter) — cluster health, indexing rate
+#   - Logstash (Logstash monitoring API) — pipeline throughput, errors
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+  external_labels:
+    cluster: "visa-fraud-pipeline"
+    environment: "dev"
+
+# =============================================================================
+# ALERTING RULES
+# =============================================================================
+rule_files:
+  - "alert_rules.yml"
+
+# =============================================================================
+# SCRAPE CONFIGS — Where to collect metrics from
+# =============================================================================
+scrape_configs:
+
+  # ─── PROMETHEUS SELF-MONITORING ──────────────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ─── FLINK METRICS (built-in PrometheusReporter) ────────────────────
+  # Flink exposes Prometheus metrics natively on port 9249 when
+  # metrics.reporter.prom is configured in FLINK_PROPERTIES.
+  # Metrics: job uptime, records processed, checkpoint duration,
+  # watermark lag, operator latency, Kafka consumer lag, JVM stats.
+  - job_name: "flink"
+    static_configs:
+      - targets: ["flink-jobmanager:9249"]
+        labels:
+          component: "jobmanager"
+      - targets: ["flink-taskmanager:9249"]
+        labels:
+          component: "taskmanager"
+    metrics_path: /

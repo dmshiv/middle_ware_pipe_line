@@ -1,0 +1,746 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ============================================================================
+  CREDIT CARD TRANSACTION FRAUD DETECTION PIPELINE — ARCHITECTURE DIAGRAM
+  ============================================================================
+  An animated SVG showing the real-time data flow from transaction generation
+  through Kafka messaging, Hazelcast enrichment, Flink stream processing,
+  and ELK stack analytics/visualization.
+  
+  ANIMATIONS:
+    - Pulsing data particles flowing along pipeline paths
+    - Breathing glow effects on active service nodes
+    - Streaming data indicators on Kafka topics
+    - Rotating processing indicators on Flink
+    - Dashboard flickering on Kibana
+  ============================================================================
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" width="1400" height="900">
+  <defs>
+    <!-- ================================================================== -->
+    <!-- GRADIENT DEFINITIONS — Each service gets a unique color identity    -->
+    <!-- ================================================================== -->
+    
+    <!-- Dark background gradient (Dark navy theme) -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0e27"/>
+      <stop offset="50%" style="stop-color:#111638"/>
+      <stop offset="100%" style="stop-color:#0a0e27"/>
+    </linearGradient>
+    
+    <!-- Kafka — Orange/Amber brand color -->
+    <linearGradient id="kafkaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b00"/>
+      <stop offset="100%" style="stop-color:#ff9500"/>
+    </linearGradient>
+    
+    <!-- Hazelcast — Blue brand color -->
+    <linearGradient id="hazelcastGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2b7de9"/>
+      <stop offset="100%" style="stop-color:#5ba3f5"/>
+    </linearGradient>
+    
+    <!-- Flink — Magenta/Pink brand color -->
+    <linearGradient id="flinkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e6186b"/>
+      <stop offset="100%" style="stop-color:#ff4081"/>
+    </linearGradient>
+    
+    <!-- Elasticsearch — Yellow/Green brand color -->
+    <linearGradient id="esGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00bfb3"/>
+      <stop offset="100%" style="stop-color:#00e5d2"/>
+    </linearGradient>
+    
+    <!-- Logstash — Green brand color -->
+    <linearGradient id="logstashGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5a623"/>
+      <stop offset="100%" style="stop-color:#f7c948"/>
+    </linearGradient>
+    
+    <!-- Kibana — Pink/Magenta brand color -->
+    <linearGradient id="kibanaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8478b"/>
+      <stop offset="100%" style="stop-color:#f06eaa"/>
+    </linearGradient>
+    
+    <!-- Simulator — Cyan/Teal -->
+    <linearGradient id="simGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d2ff"/>
+      <stop offset="100%" style="stop-color:#3a7bd5"/>
+    </linearGradient>
+    
+    <!-- Alert/Fraud — Red -->
+    <linearGradient id="alertGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff416c"/>
+      <stop offset="100%" style="stop-color:#ff4b2b"/>
+    </linearGradient>
+    
+    <!-- Kubernetes — Blue -->
+    <linearGradient id="k8sGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#326ce5"/>
+      <stop offset="100%" style="stop-color:#4a90d9"/>
+    </linearGradient>
+
+    <!-- Data flow particle gradient -->
+    <radialGradient id="particleGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#00ff88;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#00ff88;stop-opacity:0"/>
+    </radialGradient>
+    
+    <radialGradient id="alertParticleGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ff4444;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#ff4444;stop-opacity:0"/>
+    </radialGradient>
+
+    <!-- Glow filter for active services -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Stronger glow for data particles -->
+    <filter id="particleGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Shadow for service boxes -->
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="2" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+
+    <!-- ================================================================== -->
+    <!-- ANIMATED DATA FLOW PATHS                                           -->
+    <!-- These define the curved paths that data particles follow           -->
+    <!-- ================================================================== -->
+    
+    <!-- Path: Simulator → Kafka -->
+    <path id="path-sim-kafka" d="M 230 270 C 300 270, 340 270, 420 270" fill="none"/>
+    
+    <!-- Path: Kafka → Enrichment (Hazelcast) -->
+    <path id="path-kafka-enrich" d="M 600 270 C 650 270, 680 270, 720 270" fill="none"/>
+    
+    <!-- Path: Enrichment → Kafka (enriched back) -->
+    <path id="path-enrich-kafka" d="M 720 310 C 680 310, 650 330, 600 330" fill="none"/>
+    
+    <!-- Path: Kafka → Flink -->
+    <path id="path-kafka-flink" d="M 510 370 C 510 440, 510 460, 510 500" fill="none"/>
+    
+    <!-- Path: Flink → Kafka alerts -->
+    <path id="path-flink-kafka" d="M 560 500 C 590 460, 590 420, 560 370" fill="none"/>
+    
+    <!-- Path: Kafka → Logstash -->
+    <path id="path-kafka-logstash" d="M 600 330 C 700 380, 850 420, 950 470" fill="none"/>
+    
+    <!-- Path: Logstash → Elasticsearch -->
+    <path id="path-logstash-es" d="M 1030 470 C 1060 470, 1100 390, 1130 330" fill="none"/>
+    
+    <!-- Path: Elasticsearch → Kibana -->
+    <path id="path-es-kibana" d="M 1200 260 C 1220 200, 1250 180, 1280 160" fill="none"/>
+  </defs>
+
+  <!-- ====================================================================== -->
+  <!-- BACKGROUND                                                             -->
+  <!-- ====================================================================== -->
+  <rect width="1400" height="900" fill="url(#bgGrad)"/>
+  
+  <!-- Subtle grid pattern for depth -->
+  <g opacity="0.04">
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-width="0.5"/>
+    </pattern>
+    <rect width="1400" height="900" fill="url(#grid)"/>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- TITLE SECTION                                                          -->
+  <!-- ====================================================================== -->
+  <g>
+    <!-- Header bar -->
+    <rect x="0" y="0" width="1400" height="60" fill="#1a1f4e" opacity="0.8"/>
+    <text x="30" y="40" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="bold" fill="#f7b731">CREDIT CARD</text>
+    <text x="280" y="40" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#ffffff" opacity="0.9">Real-time Transaction Fraud Detection &amp; Analytics Pipeline</text>
+    
+    <!-- Live indicator -->
+    <circle cx="1330" cy="30" r="5" fill="#00ff88">
+      <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+    <text x="1340" y="35" font-family="Arial, sans-serif" font-size="11" fill="#00ff88">LIVE</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- LAYER 1: TRANSACTION SIMULATOR (Source)                                -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadow)">
+    <!-- Service box -->
+    <rect x="60" y="210" width="170" height="120" rx="12" fill="#141830" stroke="url(#simGrad)" stroke-width="2">
+      <animate attributeName="stroke-opacity" values="0.6;1;0.6" dur="3s" repeatCount="indefinite"/>
+    </rect>
+    
+    <!-- Icon: Credit card -->
+    <rect x="85" y="230" width="30" height="20" rx="3" fill="none" stroke="#00d2ff" stroke-width="1.5"/>
+    <line x1="85" y1="240" x2="115" y2="240" stroke="#00d2ff" stroke-width="1" opacity="0.5"/>
+    <rect x="90" y="244" width="15" height="3" rx="1" fill="#00d2ff" opacity="0.5"/>
+    
+    <text x="120" y="245" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#00d2ff">Python</text>
+    <text x="80" y="270" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#ffffff">Transaction</text>
+    <text x="80" y="288" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#ffffff">Simulator</text>
+    <text x="80" y="308" font-family="Arial, sans-serif" font-size="10" fill="#888">~100 txn/sec</text>
+    
+    <!-- Transaction counter animation -->
+    <text x="165" y="308" font-family="monospace" font-size="10" fill="#00ff88" text-anchor="end">
+      <animate attributeName="opacity" values="1;0.5;1" dur="0.5s" repeatCount="indefinite"/>
+      ●
+    </text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- LAYER 2: APACHE KAFKA (Message Broker)                                 -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadow)">
+    <!-- Kafka main box -->
+    <rect x="420" y="190" width="180" height="200" rx="12" fill="#141830" stroke="url(#kafkaGrad)" stroke-width="2">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2.5s" repeatCount="indefinite"/>
+    </rect>
+    
+    <!-- Kafka logo area -->
+    <text x="440" y="220" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#ff9500">Apache Kafka</text>
+    <text x="440" y="236" font-family="Arial, sans-serif" font-size="10" fill="#888">Confluent 7.5.0 • Port 9092</text>
+    
+    <!-- Topic bars with streaming animation -->
+    <g>
+      <!-- Topic 1: transactions.raw -->
+      <rect x="440" y="250" width="140" height="18" rx="3" fill="#1e2340"/>
+      <rect x="440" y="250" width="100" height="18" rx="3" fill="#ff6b00" opacity="0.2">
+        <animate attributeName="width" values="40;140;40" dur="3s" repeatCount="indefinite"/>
+      </rect>
+      <text x="448" y="263" font-family="monospace" font-size="8" fill="#ff9500">txn.raw</text>
+      <text x="570" y="263" font-family="monospace" font-size="7" fill="#666" text-anchor="end">6 parts</text>
+      
+      <!-- Topic 2: transactions.enriched -->
+      <rect x="440" y="274" width="140" height="18" rx="3" fill="#1e2340"/>
+      <rect x="440" y="274" width="100" height="18" rx="3" fill="#2b7de9" opacity="0.2">
+        <animate attributeName="width" values="60;140;60" dur="3.5s" repeatCount="indefinite"/>
+      </rect>
+      <text x="448" y="287" font-family="monospace" font-size="8" fill="#5ba3f5">txn.enriched</text>
+      <text x="570" y="287" font-family="monospace" font-size="7" fill="#666" text-anchor="end">6 parts</text>
+      
+      <!-- Topic 3: transactions.blocked -->
+      <rect x="440" y="298" width="140" height="18" rx="3" fill="#1e2340"/>
+      <rect x="440" y="298" width="100" height="18" rx="3" fill="#ff416c" opacity="0.2">
+        <animate attributeName="width" values="20;80;20" dur="4s" repeatCount="indefinite"/>
+      </rect>
+      <text x="448" y="311" font-family="monospace" font-size="8" fill="#ff416c">txn.blocked</text>
+      <text x="570" y="311" font-family="monospace" font-size="7" fill="#666" text-anchor="end">3 parts</text>
+      
+      <!-- Topic 4: transactions.alerts -->
+      <rect x="440" y="322" width="140" height="18" rx="3" fill="#1e2340"/>
+      <rect x="440" y="322" width="100" height="18" rx="3" fill="#e6186b" opacity="0.2">
+        <animate attributeName="width" values="30;100;30" dur="2.8s" repeatCount="indefinite"/>
+      </rect>
+      <text x="448" y="335" font-family="monospace" font-size="8" fill="#ff4081">txn.alerts</text>
+      <text x="570" y="335" font-family="monospace" font-size="7" fill="#666" text-anchor="end">3 parts</text>
+      
+      <!-- Topic 5: transactions.aggregated -->
+      <rect x="440" y="346" width="140" height="18" rx="3" fill="#1e2340"/>
+      <rect x="440" y="346" width="100" height="18" rx="3" fill="#00bfb3" opacity="0.2">
+        <animate attributeName="width" values="50;120;50" dur="3.2s" repeatCount="indefinite"/>
+      </rect>
+      <text x="448" y="359" font-family="monospace" font-size="8" fill="#00e5d2">txn.aggregated</text>
+      <text x="570" y="359" font-family="monospace" font-size="7" fill="#666" text-anchor="end">3 parts</text>
+    </g>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- LAYER 3: HAZELCAST ENRICHMENT SERVICE                                  -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadow)">
+    <rect x="720" y="190" width="180" height="170" rx="12" fill="#141830" stroke="url(#hazelcastGrad)" stroke-width="2">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+    </rect>
+    
+    <text x="740" y="218" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#5ba3f5">Hazelcast IMDG</text>
+    <text x="740" y="234" font-family="Arial, sans-serif" font-size="10" fill="#888">v5.3 • 2-Node Cluster</text>
+    
+    <!-- Cache entries visualization -->
+    <g>
+      <!-- Hot card blocklist -->
+      <rect x="740" y="248" width="140" height="24" rx="4" fill="#1e2340" stroke="#2b7de9" stroke-width="0.5"/>
+      <circle cx="752" cy="260" r="4" fill="#ff4444">
+        <animate attributeName="fill" values="#ff4444;#ff8888;#ff4444" dur="1s" repeatCount="indefinite"/>
+      </circle>
+      <text x="762" y="264" font-family="Arial, sans-serif" font-size="9" fill="#ccc">Hot Card Blocklist</text>
+      <text x="870" y="264" font-family="monospace" font-size="8" fill="#ff4444" text-anchor="end">100K</text>
+      
+      <!-- Merchant registry -->
+      <rect x="740" y="278" width="140" height="24" rx="4" fill="#1e2340" stroke="#2b7de9" stroke-width="0.5"/>
+      <circle cx="752" cy="290" r="4" fill="#00bfb3"/>
+      <text x="762" y="294" font-family="Arial, sans-serif" font-size="9" fill="#ccc">Merchant Registry</text>
+      <text x="870" y="294" font-family="monospace" font-size="8" fill="#00bfb3" text-anchor="end">LFU</text>
+      
+      <!-- Velocity counter -->
+      <rect x="740" y="308" width="140" height="24" rx="4" fill="#1e2340" stroke="#2b7de9" stroke-width="0.5"/>
+      <circle cx="752" cy="320" r="4" fill="#f7b731"/>
+      <text x="762" y="324" font-family="Arial, sans-serif" font-size="9" fill="#ccc">Velocity Counter</text>
+      <text x="870" y="324" font-family="monospace" font-size="8" fill="#f7b731" text-anchor="end">5m TTL</text>
+    </g>
+    
+    <!-- Sub-5ms latency badge -->
+    <rect x="755" y="340" width="65" height="14" rx="7" fill="#2b7de9" opacity="0.3"/>
+    <text x="787" y="350" font-family="Arial, sans-serif" font-size="8" fill="#5ba3f5" text-anchor="middle">&lt;5ms lookup</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- LAYER 4: ENRICHMENT SERVICE (Python)                                   -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadow)">
+    <rect x="720" y="380" width="180" height="80" rx="12" fill="#141830" stroke="#7c4dff" stroke-width="1.5">
+      <animate attributeName="stroke-opacity" values="0.4;0.9;0.4" dur="2.5s" repeatCount="indefinite"/>
+    </rect>
+    <text x="740" y="408" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#b388ff">Enrichment Service</text>
+    <text x="740" y="424" font-family="Arial, sans-serif" font-size="10" fill="#888">Python 3.11 • Risk Scoring</text>
+    <text x="740" y="442" font-family="Arial, sans-serif" font-size="9" fill="#666">Blocklist + Geo + Merchant</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- LAYER 5: APACHE FLINK (Stream Processing)                              -->
+  <!-- ====================================================================== -->
+  <g filter="url(#shadow)">
+    <rect x="370" y="500" width="280" height="180" rx="12" fill="#141830" stroke="url(#flinkGrad)" stroke-width="2">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+    </rect>
+    
+    <text x="395" y="530" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#ff4081">Apache Flink</text>
+    <text x="395" y="546" font-family="Arial, sans-serif" font-size="10" fill="#888">v1.18.1 • Java 11 • Event Time</text>
+    
+    <!-- 4 Fraud Detection Jobs -->
+    <g>
+      <!-- Job 1: Velocity Check -->
+      <rect x="390" y="560" width="115" height="36" rx="6" fill="#1e2340" stroke="#e6186b" stroke-width="0.8"/>
+      <text x="400" y="575" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#ff4081">Velocity Check</text>
+      <text x="400" y="588" font-family="monospace" font-size="7" fill="#888">Tumble 60s | &gt;5 txn</text>
+      <!-- Spinning indicator -->
+      <circle cx="495" cy="578" r="6" fill="none" stroke="#e6186b" stroke-width="1" stroke-dasharray="8 4">
+        <animateTransform attributeName="transform" type="rotate" from="0 495 578" to="360 495 578" dur="2s" repeatCount="indefinite"/>
+      </circle>
+      
+      <!-- Job 2: Geo-Hopping -->
+      <rect x="515" y="560" width="115" height="36" rx="6" fill="#1e2340" stroke="#e6186b" stroke-width="0.8"/>
+      <text x="525" y="575" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#ff4081">Geo-Hop Detect</text>
+      <text x="525" y="588" font-family="monospace" font-size="7" fill="#888">CEP Pattern &lt;10m</text>
+      <circle cx="620" cy="578" r="6" fill="none" stroke="#e6186b" stroke-width="1" stroke-dasharray="8 4">
+        <animateTransform attributeName="transform" type="rotate" from="0 620 578" to="360 620 578" dur="1.8s" repeatCount="indefinite"/>
+      </circle>
+      
+      <!-- Job 3: Amount Anomaly -->
+      <rect x="390" y="604" width="115" height="36" rx="6" fill="#1e2340" stroke="#e6186b" stroke-width="0.8"/>
+      <text x="400" y="619" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#ff4081">Amount Anomaly</text>
+      <text x="400" y="632" font-family="monospace" font-size="7" fill="#888">Slide 1h/5m | &gt;3σ</text>
+      <circle cx="495" cy="622" r="6" fill="none" stroke="#e6186b" stroke-width="1" stroke-dasharray="8 4">
+        <animateTransform attributeName="transform" type="rotate" from="0 495 622" to="360 495 622" dur="2.2s" repeatCount="indefinite"/>
+      </circle>
+      
+      <!-- Job 4: Aggregation -->
+      <rect x="515" y="604" width="115" height="36" rx="6" fill="#1e2340" stroke="#e6186b" stroke-width="0.8"/>
+      <text x="525" y="619" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#ff4081">Aggregation</text>
+      <text x="525" y="632" font-family="monospace" font-size="7" fill="#888">Tumble 5m | Stats</text>
+      <circle cx="620" cy="622" r="6" fill="none" stroke="#e6186b" stroke-width="1" stroke-dasharray="8 4">
+        <animateTransform attributeName="transform" type="rotate" from="0 620 622" to="360 620 622" dur="2.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    
+    <!-- HPA indicator -->
+    <rect x="400" y="650" width="80" height="16" rx="8" fill="#e6186b" opacity="0.2"/>
+    <text x="440" y="661" font-family="Arial, sans-serif" font-size="8" fill="#ff4081" text-anchor="middle">HPA: 2→8 pods</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- LAYER 6: ELK STACK                                                     -->
+  <!-- ====================================================================== -->
+  
+  <!-- Logstash -->
+  <g filter="url(#shadow)">
+    <rect x="940" y="430" width="160" height="100" rx="12" fill="#141830" stroke="url(#logstashGrad)" stroke-width="2">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2.2s" repeatCount="indefinite"/>
+    </rect>
+    <text x="960" y="460" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#f7c948">Logstash</text>
+    <text x="960" y="476" font-family="Arial, sans-serif" font-size="10" fill="#888">v8.11.0 • Port 9600</text>
+    <text x="960" y="496" font-family="Arial, sans-serif" font-size="9" fill="#666">PCI-DSS Card Masking</text>
+    <text x="960" y="510" font-family="Arial, sans-serif" font-size="9" fill="#666">4 Kafka Inputs → ES</text>
+  </g>
+  
+  <!-- Elasticsearch -->
+  <g filter="url(#shadow)">
+    <rect x="1100" y="240" width="170" height="140" rx="12" fill="#141830" stroke="url(#esGrad)" stroke-width="2">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2.8s" repeatCount="indefinite"/>
+    </rect>
+    <text x="1120" y="268" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#00e5d2">Elasticsearch</text>
+    <text x="1120" y="284" font-family="Arial, sans-serif" font-size="10" fill="#888">v8.11.0 • Port 9200</text>
+    
+    <!-- Index indicators -->
+    <rect x="1120" y="296" width="130" height="16" rx="3" fill="#1e2340"/>
+    <text x="1128" y="308" font-family="monospace" font-size="8" fill="#00bfb3">card-transactions</text>
+    
+    <rect x="1120" y="318" width="130" height="16" rx="3" fill="#1e2340"/>
+    <text x="1128" y="330" font-family="monospace" font-size="8" fill="#ff4081">card-fraud-alerts</text>
+    
+    <rect x="1120" y="340" width="130" height="16" rx="3" fill="#1e2340"/>
+    <text x="1128" y="352" font-family="monospace" font-size="8" fill="#f7c948">card-aggregations</text>
+    
+    <!-- ILM badge -->
+    <rect x="1120" y="362" width="50" height="12" rx="6" fill="#00bfb3" opacity="0.2"/>
+    <text x="1145" y="372" font-family="Arial, sans-serif" font-size="7" fill="#00bfb3" text-anchor="middle">ILM 90d</text>
+  </g>
+  
+  <!-- Kibana -->
+  <g filter="url(#shadow)">
+    <rect x="1100" y="90" width="170" height="120" rx="12" fill="#141830" stroke="url(#kibanaGrad)" stroke-width="2">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="1.8s" repeatCount="indefinite"/>
+    </rect>
+    <text x="1120" y="118" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#f06eaa">Kibana</text>
+    <text x="1120" y="134" font-family="Arial, sans-serif" font-size="10" fill="#888">v8.11.0 • Port 5601</text>
+    
+    <!-- Mini dashboard visualization -->
+    <g>
+      <!-- Mini bar chart -->
+      <rect x="1125" y="170" width="6" height="20" rx="1" fill="#00bfb3" opacity="0.6">
+        <animate attributeName="height" values="20;12;20" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="y" values="170;178;170" dur="2s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="1135" y="160" width="6" height="30" rx="1" fill="#5ba3f5" opacity="0.6">
+        <animate attributeName="height" values="30;18;30" dur="2.5s" repeatCount="indefinite"/>
+        <animate attributeName="y" values="160;172;160" dur="2.5s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="1145" y="165" width="6" height="25" rx="1" fill="#ff4081" opacity="0.6">
+        <animate attributeName="height" values="25;15;25" dur="1.8s" repeatCount="indefinite"/>
+        <animate attributeName="y" values="165;175;165" dur="1.8s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="1155" y="172" width="6" height="18" rx="1" fill="#f7c948" opacity="0.6">
+        <animate attributeName="height" values="18;28;18" dur="3s" repeatCount="indefinite"/>
+        <animate attributeName="y" values="172;162;172" dur="3s" repeatCount="indefinite"/>
+      </rect>
+      
+      <!-- Mini line chart -->
+      <polyline points="1180,185 1195,170 1210,178 1225,162 1240,168 1255,155" fill="none" stroke="#00ff88" stroke-width="1.5" stroke-linecap="round">
+        <animate attributeName="points" values="1180,185 1195,170 1210,178 1225,162 1240,168 1255,155;1180,175 1195,180 1210,165 1225,172 1240,158 1255,165;1180,185 1195,170 1210,178 1225,162 1240,168 1255,155" dur="3s" repeatCount="indefinite"/>
+      </polyline>
+    </g>
+    
+    <text x="1120" y="200" font-family="Arial, sans-serif" font-size="8" fill="#666">Fraud Analytics Dashboard</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- CONNECTION ARROWS WITH ANIMATED DATA PARTICLES                         -->
+  <!-- ====================================================================== -->
+  
+  <!-- Arrow: Simulator → Kafka (raw transactions) -->
+  <g>
+    <line x1="230" y1="270" x2="418" y2="262" stroke="#00d2ff" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.4"/>
+    <polygon points="418,258 428,262 418,266" fill="#00d2ff" opacity="0.6"/>
+    <text x="310" y="255" font-family="Arial, sans-serif" font-size="8" fill="#00d2ff" text-anchor="middle" opacity="0.8">txn.raw</text>
+    
+    <!-- Animated particles -->
+    <circle r="3" fill="#00d2ff" filter="url(#particleGlow)">
+      <animateMotion dur="2s" repeatCount="indefinite">
+        <mpath href="#path-sim-kafka"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="3" fill="#00d2ff" filter="url(#particleGlow)">
+      <animateMotion dur="2s" repeatCount="indefinite" begin="0.7s">
+        <mpath href="#path-sim-kafka"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="2s" repeatCount="indefinite" begin="0.7s"/>
+    </circle>
+    <circle r="3" fill="#00d2ff" filter="url(#particleGlow)">
+      <animateMotion dur="2s" repeatCount="indefinite" begin="1.4s">
+        <mpath href="#path-sim-kafka"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="2s" repeatCount="indefinite" begin="1.4s"/>
+    </circle>
+  </g>
+  
+  <!-- Arrow: Kafka → Enrichment -->
+  <g>
+    <line x1="600" y1="270" x2="718" y2="270" stroke="#ff9500" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.4"/>
+    <polygon points="718,266 728,270 718,274" fill="#ff9500" opacity="0.6"/>
+    <text x="660" y="262" font-family="Arial, sans-serif" font-size="8" fill="#5ba3f5" text-anchor="middle" opacity="0.8">consume</text>
+    
+    <circle r="3" fill="#ff9500" filter="url(#particleGlow)">
+      <animateMotion dur="1.5s" repeatCount="indefinite">
+        <mpath href="#path-kafka-enrich"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="3" fill="#ff9500" filter="url(#particleGlow)">
+      <animateMotion dur="1.5s" repeatCount="indefinite" begin="0.75s">
+        <mpath href="#path-kafka-enrich"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="1.5s" repeatCount="indefinite" begin="0.75s"/>
+    </circle>
+  </g>
+  
+  <!-- Arrow: Enrichment → Kafka (enriched back) -->
+  <g>
+    <line x1="720" y1="310" x2="602" y2="310" stroke="#5ba3f5" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.3"/>
+    <polygon points="602,306 592,310 602,314" fill="#5ba3f5" opacity="0.5"/>
+    <text x="660" y="304" font-family="Arial, sans-serif" font-size="8" fill="#5ba3f5" text-anchor="middle" opacity="0.8">enriched</text>
+    
+    <circle r="2.5" fill="#5ba3f5" filter="url(#particleGlow)">
+      <animateMotion dur="1.8s" repeatCount="indefinite">
+        <mpath href="#path-enrich-kafka"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="1.8s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Arrow: Enrichment ↔ Hazelcast (bidirectional lookup) -->
+  <g>
+    <line x1="810" y1="380" x2="810" y2="362" stroke="#7c4dff" stroke-width="1" stroke-dasharray="4 2" opacity="0.4"/>
+    <text x="825" y="374" font-family="Arial, sans-serif" font-size="7" fill="#b388ff" opacity="0.7">lookup</text>
+    
+    <!-- Bidirectional arrows -->
+    <polygon points="807,365 810,358 813,365" fill="#7c4dff" opacity="0.5"/>
+    <polygon points="807,378 810,385 813,378" fill="#7c4dff" opacity="0.5"/>
+  </g>
+  
+  <!-- Arrow: Kafka → Flink -->
+  <g>
+    <line x1="510" y1="390" x2="510" y2="498" stroke="#ff9500" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.4"/>
+    <polygon points="506,498 510,508 514,498" fill="#ff4081" opacity="0.6"/>
+    <text x="498" y="445" font-family="Arial, sans-serif" font-size="8" fill="#ff4081" text-anchor="end" opacity="0.8" transform="rotate(-90,498,445)">enriched stream</text>
+    
+    <circle r="3" fill="#ff4081" filter="url(#particleGlow)">
+      <animateMotion dur="2.2s" repeatCount="indefinite">
+        <mpath href="#path-kafka-flink"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="2.2s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Arrow: Flink → Kafka (alerts back) -->
+  <g>
+    <line x1="550" y1="500" x2="550" y2="392" stroke="#ff416c" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.3"/>
+    <polygon points="546,392 550,382 554,392" fill="#ff416c" opacity="0.5"/>
+    <text x="562" y="445" font-family="Arial, sans-serif" font-size="8" fill="#ff416c" opacity="0.8" transform="rotate(-90,562,445)">fraud alerts</text>
+    
+    <circle r="3" fill="#ff4444" filter="url(#particleGlow)">
+      <animateMotion dur="3s" repeatCount="indefinite">
+        <mpath href="#path-flink-kafka"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;0.8;0" dur="3s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Arrow: Kafka → Logstash -->
+  <g>
+    <path d="M 600 340 Q 750 400 938 470" fill="none" stroke="#f7c948" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.3"/>
+    <polygon points="934,466 944,472 936,477" fill="#f7c948" opacity="0.5"/>
+    <text x="770" y="390" font-family="Arial, sans-serif" font-size="8" fill="#f7c948" opacity="0.8">all topics</text>
+    
+    <circle r="3" fill="#f7c948" filter="url(#particleGlow)">
+      <animateMotion dur="2.5s" repeatCount="indefinite" path="M 600 340 Q 750 400 938 470">
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="3" fill="#f7c948" filter="url(#particleGlow)">
+      <animateMotion dur="2.5s" repeatCount="indefinite" begin="1.2s" path="M 600 340 Q 750 400 938 470">
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="2.5s" repeatCount="indefinite" begin="1.2s"/>
+    </circle>
+  </g>
+  
+  <!-- Arrow: Logstash → Elasticsearch -->
+  <g>
+    <path d="M 1050 430 Q 1080 380 1130 340" fill="none" stroke="#00bfb3" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.3"/>
+    <polygon points="1126,344 1134,336 1134,346" fill="#00bfb3" opacity="0.5"/>
+    <text x="1095" y="375" font-family="Arial, sans-serif" font-size="8" fill="#00bfb3" opacity="0.8">index</text>
+    
+    <circle r="3" fill="#00e5d2" filter="url(#particleGlow)">
+      <animateMotion dur="1.8s" repeatCount="indefinite" path="M 1050 430 Q 1080 380 1130 340">
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="1.8s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Arrow: Elasticsearch → Kibana -->
+  <g>
+    <line x1="1185" y1="240" x2="1185" y2="212" stroke="#f06eaa" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.3"/>
+    <polygon points="1181,215 1185,205 1189,215" fill="#f06eaa" opacity="0.5"/>
+    <text x="1195" y="230" font-family="Arial, sans-serif" font-size="8" fill="#f06eaa" opacity="0.8">query</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- KUBERNETES ORCHESTRATION LAYER (Bottom)                                -->
+  <!-- ====================================================================== -->
+  <g>
+    <rect x="50" y="730" width="900" height="80" rx="12" fill="#141830" stroke="url(#k8sGrad)" stroke-width="1.5" stroke-dasharray="8 4" opacity="0.6"/>
+    
+    <!-- K8s wheel icon (simplified) -->
+    <circle cx="90" cy="770" r="15" fill="none" stroke="#326ce5" stroke-width="2" opacity="0.7">
+      <animateTransform attributeName="transform" type="rotate" from="0 90 770" to="360 90 770" dur="10s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="90" cy="770" r="5" fill="#326ce5" opacity="0.5"/>
+    <!-- Spokes -->
+    <line x1="90" y1="755" x2="90" y2="758" stroke="#326ce5" stroke-width="2" opacity="0.7">
+      <animateTransform attributeName="transform" type="rotate" from="0 90 770" to="360 90 770" dur="10s" repeatCount="indefinite"/>
+    </line>
+    <line x1="90" y1="782" x2="90" y2="785" stroke="#326ce5" stroke-width="2" opacity="0.7">
+      <animateTransform attributeName="transform" type="rotate" from="0 90 770" to="360 90 770" dur="10s" repeatCount="indefinite"/>
+    </line>
+    
+    <text x="115" y="765" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a90d9">Kubernetes Orchestration</text>
+    <text x="115" y="782" font-family="Arial, sans-serif" font-size="10" fill="#888">Kind Cluster • StatefulSets • HPA • NetworkPolicy • TLS/Kerberos</text>
+    
+    <!-- Pod representations -->
+    <g opacity="0.7">
+      <rect x="380" y="750" width="60" height="28" rx="4" fill="#1e2340" stroke="#326ce5" stroke-width="1"/>
+      <text x="410" y="768" font-family="Arial, sans-serif" font-size="8" fill="#4a90d9" text-anchor="middle">Kafka×3</text>
+      
+      <rect x="450" y="750" width="70" height="28" rx="4" fill="#1e2340" stroke="#326ce5" stroke-width="1"/>
+      <text x="485" y="768" font-family="Arial, sans-serif" font-size="8" fill="#4a90d9" text-anchor="middle">Hazelcast×2</text>
+      
+      <rect x="530" y="750" width="60" height="28" rx="4" fill="#1e2340" stroke="#326ce5" stroke-width="1"/>
+      <text x="560" y="768" font-family="Arial, sans-serif" font-size="8" fill="#4a90d9" text-anchor="middle">Flink×8</text>
+      
+      <rect x="600" y="750" width="40" height="28" rx="4" fill="#1e2340" stroke="#326ce5" stroke-width="1"/>
+      <text x="620" y="768" font-family="Arial, sans-serif" font-size="8" fill="#4a90d9" text-anchor="middle">ES</text>
+      
+      <rect x="650" y="750" width="50" height="28" rx="4" fill="#1e2340" stroke="#326ce5" stroke-width="1"/>
+      <text x="675" y="768" font-family="Arial, sans-serif" font-size="8" fill="#4a90d9" text-anchor="middle">Kibana</text>
+      
+      <rect x="710" y="750" width="60" height="28" rx="4" fill="#1e2340" stroke="#326ce5" stroke-width="1"/>
+      <text x="740" y="768" font-family="Arial, sans-serif" font-size="8" fill="#4a90d9" text-anchor="middle">Logstash</text>
+    </g>
+    
+    <!-- Security badges -->
+    <g>
+      <rect x="800" y="750" width="55" height="13" rx="6" fill="#ff416c" opacity="0.2"/>
+      <text x="827" y="760" font-family="Arial, sans-serif" font-size="7" fill="#ff416c" text-anchor="middle">TLS/SSL</text>
+      
+      <rect x="860" y="750" width="55" height="13" rx="6" fill="#f7b731" opacity="0.2"/>
+      <text x="887" y="760" font-family="Arial, sans-serif" font-size="7" fill="#f7b731" text-anchor="middle">Kerberos</text>
+      
+      <rect x="800" y="767" width="115" height="13" rx="6" fill="#326ce5" opacity="0.2"/>
+      <text x="857" y="777" font-family="Arial, sans-serif" font-size="7" fill="#4a90d9" text-anchor="middle">NetworkPolicy Isolation</text>
+    </g>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- TERRAFORM / AWS CLOUD LAYER (Bottom-right)                             -->
+  <!-- ====================================================================== -->
+  <g>
+    <rect x="980" y="730" width="380" height="80" rx="12" fill="#141830" stroke="#7b42f6" stroke-width="1.5" stroke-dasharray="8 4" opacity="0.6"/>
+    
+    <!-- Terraform icon -->
+    <g transform="translate(1010,758)">
+      <rect x="0" y="0" width="8" height="8" fill="#7b42f6" opacity="0.8"/>
+      <rect x="10" y="0" width="8" height="8" fill="#7b42f6" opacity="0.6"/>
+      <rect x="10" y="10" width="8" height="8" fill="#7b42f6" opacity="0.4"/>
+    </g>
+    
+    <text x="1040" y="765" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#a78bfa">Terraform → AWS</text>
+    <text x="1040" y="782" font-family="Arial, sans-serif" font-size="10" fill="#888">MSK • OpenSearch • ElastiCache • ECS Fargate</text>
+    
+    <!-- AWS service badges -->
+    <g opacity="0.7">
+      <rect x="1200" y="750" width="45" height="13" rx="6" fill="#ff9900" opacity="0.2"/>
+      <text x="1222" y="760" font-family="Arial, sans-serif" font-size="7" fill="#ff9900" text-anchor="middle">MSK</text>
+      
+      <rect x="1250" y="750" width="55" height="13" rx="6" fill="#ff9900" opacity="0.2"/>
+      <text x="1277" y="760" font-family="Arial, sans-serif" font-size="7" fill="#ff9900" text-anchor="middle">ECS</text>
+      
+      <rect x="1310" y="750" width="35" height="13" rx="6" fill="#ff9900" opacity="0.2"/>
+      <text x="1327" y="760" font-family="Arial, sans-serif" font-size="7" fill="#ff9900" text-anchor="middle">VPC</text>
+    </g>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- DATA FLOW LEGEND                                                       -->
+  <!-- ====================================================================== -->
+  <g transform="translate(50, 830)">
+    <text x="0" y="15" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#ffffff" opacity="0.7">DATA FLOW:</text>
+    
+    <circle cx="110" cy="11" r="4" fill="#00d2ff"/>
+    <text x="120" y="15" font-family="Arial, sans-serif" font-size="9" fill="#888">Raw Transactions</text>
+    
+    <circle cx="250" cy="11" r="4" fill="#ff9500"/>
+    <text x="260" y="15" font-family="Arial, sans-serif" font-size="9" fill="#888">Kafka Messages</text>
+    
+    <circle cx="380" cy="11" r="4" fill="#5ba3f5"/>
+    <text x="390" y="15" font-family="Arial, sans-serif" font-size="9" fill="#888">Enriched Data</text>
+    
+    <circle cx="500" cy="11" r="4" fill="#ff4444"/>
+    <text x="510" y="15" font-family="Arial, sans-serif" font-size="9" fill="#888">Fraud Alerts</text>
+    
+    <circle cx="610" cy="11" r="4" fill="#f7c948"/>
+    <text x="620" y="15" font-family="Arial, sans-serif" font-size="9" fill="#888">Log Pipeline</text>
+    
+    <circle cx="720" cy="11" r="4" fill="#00e5d2"/>
+    <text x="730" y="15" font-family="Arial, sans-serif" font-size="9" fill="#888">Search Index</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- METRICS PANEL (Top-right stats)                                        -->
+  <!-- ====================================================================== -->
+  <g>
+    <rect x="50" y="80" width="360" height="100" rx="10" fill="#141830" stroke="#333" stroke-width="1" opacity="0.8"/>
+    <text x="70" y="102" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#ffffff" opacity="0.8">PIPELINE METRICS</text>
+    
+    <!-- Throughput -->
+    <text x="70" y="125" font-family="Arial, sans-serif" font-size="10" fill="#888">Throughput:</text>
+    <text x="160" y="125" font-family="monospace" font-size="11" font-weight="bold" fill="#00ff88">~100 txn/sec</text>
+    
+    <!-- Latency -->
+    <text x="70" y="145" font-family="Arial, sans-serif" font-size="10" fill="#888">End-to-End:</text>
+    <text x="160" y="145" font-family="monospace" font-size="11" font-weight="bold" fill="#00ff88">&lt;2 sec</text>
+    
+    <!-- Fraud detection -->
+    <text x="70" y="165" font-family="Arial, sans-serif" font-size="10" fill="#888">Fraud Detect:</text>
+    <text x="160" y="165" font-family="monospace" font-size="11" font-weight="bold" fill="#ff4081">&lt;500ms</text>
+    
+    <!-- Services -->
+    <text x="270" y="125" font-family="Arial, sans-serif" font-size="10" fill="#888">Services:</text>
+    <text x="340" y="125" font-family="monospace" font-size="11" font-weight="bold" fill="#5ba3f5">11</text>
+    
+    <!-- Topics -->
+    <text x="270" y="145" font-family="Arial, sans-serif" font-size="10" fill="#888">Kafka Topics:</text>
+    <text x="370" y="145" font-family="monospace" font-size="11" font-weight="bold" fill="#ff9500">5</text>
+    
+    <!-- Flink Jobs -->
+    <text x="270" y="165" font-family="Arial, sans-serif" font-size="10" fill="#888">Flink Jobs:</text>
+    <text x="355" y="165" font-family="monospace" font-size="11" font-weight="bold" fill="#ff4081">4</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- FRAUD ALERT NOTIFICATION (Animated popup)                              -->
+  <!-- ====================================================================== -->
+  <g opacity="0">
+    <animate attributeName="opacity" values="0;0;1;1;0;0" dur="6s" repeatCount="indefinite"/>
+    
+    <rect x="1050" y="560" width="220" height="60" rx="8" fill="#2a1020" stroke="#ff416c" stroke-width="1.5"/>
+    <text x="1070" y="580" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#ff416c">⚠ FRAUD ALERT DETECTED</text>
+    <text x="1070" y="596" font-family="monospace" font-size="9" fill="#ff8888">Card: ****4532 | Velocity: 8/min</text>
+    <text x="1070" y="610" font-family="monospace" font-size="8" fill="#888">Geo-hop: US→RU in 3 min</text>
+    
+    <!-- Pulsing alert border -->
+    <rect x="1050" y="560" width="220" height="60" rx="8" fill="none" stroke="#ff416c" stroke-width="2" opacity="0.5">
+      <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="0.8s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- FOOTER                                                                 -->
+  <!-- ====================================================================== -->
+  <text x="700" y="880" font-family="Arial, sans-serif" font-size="10" fill="#444" text-anchor="middle">
+    Credit Card Transaction Fraud Detection Pipeline • Kafka • Hazelcast • Flink • ELK • Kubernetes • Terraform
+  </text>
+</svg>

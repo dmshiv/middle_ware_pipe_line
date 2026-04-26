@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<!--
+=============================================================================
+FRAUD DETECTION DASHBOARD — Real-time Transaction Monitoring UI
+=============================================================================
+Purpose: Single-page application for monitoring the fraud detection pipeline.
+         Connects to the enrichment service API and displays live stats.
+
+Tabs:
+  1. LIVE FEED     — Real-time transaction stream with color-coded risk levels
+  2. FRAUD ALERTS  — Flink-generated alerts (velocity, geo-hop, amount anomaly)
+  3. STATISTICS    — Transaction volume, risk distribution, country breakdown
+  4. PIPELINE      — Health status of all services (Kafka, Hazelcast, Flink, ELK)
+
+Tech: Pure HTML/CSS/JS (no framework — keeps it simple and dependency-free)
+=============================================================================
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visa Fraud Detection — Real-time Dashboard</title>
+    <style>
+        /* ─── GLOBAL STYLES ─────────────────────────────────────────── */
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --border: #2d3748;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --visa-blue: #1a1f71;
+            --visa-gold: #f7b600;
+            --green: #10b981;
+            --red: #ef4444;
+            --orange: #f59e0b;
+            --purple: #8b5cf6;
+            --cyan: #06b6d4;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* ─── HEADER ────────────────────────────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, var(--visa-blue), #2d2a7a);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--visa-gold);
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .header h1 span { color: var(--visa-gold); }
+
+        .header-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .header-stat {
+            text-align: center;
+        }
+
+        .header-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--visa-gold);
+        }
+
+        .header-stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 1px;
+        }
+
+        /* ─── TABS ──────────────────────────────────────────────────── */
+        .tabs {
+            display: flex;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
+        .tab.active { color: var(--visa-gold); border-bottom-color: var(--visa-gold); }
+
+        /* ─── CONTENT ───────────────────────────────────────────────── */
+        .content { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ─── CARDS ─────────────────────────────────────────────────── */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .card-subtitle { font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; }
+
+        /* ─── TRANSACTION TABLE ─────────────────────────────────────── */
+        .txn-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .txn-table th {
+            background: var(--bg-secondary);
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border);
+            position: sticky;
+            top: 0;
+        }
+
+        .txn-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .txn-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        /* ─── BADGES ────────────────────────────────────────────────── */
+        .badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-normal { background: rgba(16,185,129,0.15); color: var(--green); }
+        .badge-suspicious { background: rgba(245,158,11,0.15); color: var(--orange); }
+        .badge-blocked { background: rgba(239,68,68,0.15); color: var(--red); }
+        .badge-low { background: rgba(16,185,129,0.15); color: var(--green); }
+        .badge-medium { background: rgba(245,158,11,0.15); color: var(--orange); }
+        .badge-high { background: rgba(239,68,68,0.15); color: var(--red); }
+        .badge-critical { background: rgba(239,68,68,0.3); color: #fca5a5; }
+
+        /* ─── ALERT CARDS ───────────────────────────────────────────── */
+        .alert-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--red);
+        }
+
+        .alert-card.velocity { border-left-color: var(--orange); }
+        .alert-card.geo-hop { border-left-color: var(--red); }
+        .alert-card.amount { border-left-color: var(--purple); }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .alert-type { font-weight: 700; font-size: 0.9rem; }
+        .alert-details { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6; }
+
+        /* ─── PIPELINE STATUS ───────────────────────────────────────── */
+        .pipeline-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .service-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .service-name { font-weight: 700; font-size: 1rem; }
+
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.healthy { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .status-dot.unhealthy { background: var(--red); box-shadow: 0 0 6px var(--red); }
+        .status-dot.unknown { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+
+        .service-details { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.8; }
+        .service-details a { color: var(--cyan); text-decoration: none; }
+        .service-details a:hover { text-decoration: underline; }
+
+        .scroll-container { max-height: 500px; overflow-y: auto; }
+
+        /* ─── CHART PLACEHOLDER ─────────────────────────────────────── */
+        .chart-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .chart-label { width: 80px; font-size: 0.8rem; color: var(--text-secondary); }
+
+        .chart-fill {
+            height: 24px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--visa-blue), var(--cyan));
+            transition: width 1s ease;
+            display: flex;
+            align-items: center;
+            padding-left: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            min-width: 40px;
+        }
+
+        .chart-fill.risk-low { background: linear-gradient(90deg, #059669, var(--green)); }
+        .chart-fill.risk-medium { background: linear-gradient(90deg, #d97706, var(--orange)); }
+        .chart-fill.risk-high { background: linear-gradient(90deg, #dc2626, var(--red)); }
+    </style>
+</head>
+<body>
+
+    <!-- ═══ HEADER ═══════════════════════════════════════════════════ -->
+    <div class="header">
+        <h1>🏦 <span>VISA</span> Fraud Detection Pipeline — Live Dashboard</h1>
+        <div class="header-stats">
+            <div class="header-stat">
+                <div class="header-stat-value" id="total-txns">0</div>
+                <div class="header-stat-label">Transactions</div>
+            </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="total-alerts" style="color: #ef4444;">0</div>
+                <div class="header-stat-label">Fraud Alerts</div>
+            </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="total-blocked" style="color: #f59e0b;">0</div>
+                <div class="header-stat-label">Blocked</div>
+            </div>
+            <div class="header-stat">
+                <div class="header-stat-value" id="txn-rate">0</div>
+                <div class="header-stat-label">TXN/sec</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TABS ═════════════════════════════════════════════════════ -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('live')">📊 Live Feed</div>
+        <div class="tab" onclick="switchTab('alerts')">🚨 Fraud Alerts</div>
+        <div class="tab" onclick="switchTab('stats')">📈 Statistics</div>
+        <div class="tab" onclick="switchTab('pipeline')">⚙️ Pipeline Health</div>
+    </div>
+
+    <div class="content">
+
+        <!-- ═══ TAB 1: LIVE TRANSACTION FEED ═════════════════════════ -->
+        <div id="tab-live" class="tab-content active">
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-title">Approved (Last 5 min)</div>
+                    <div class="card-value" id="approved-count" style="color: var(--green);">0</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Suspicious (Last 5 min)</div>
+                    <div class="card-value" id="suspicious-count" style="color: var(--orange);">0</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Blocked (Last 5 min)</div>
+                    <div class="card-value" id="blocked-count" style="color: var(--red);">0</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Avg Enrichment Latency</div>
+                    <div class="card-value" id="avg-latency" style="color: var(--cyan);">0ms</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title" style="margin-bottom: 12px;">Recent Transactions</div>
+                <div class="scroll-container">
+                    <table class="txn-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Card</th>
+                                <th>Amount</th>
+                                <th>Merchant</th>
+                                <th>Country</th>
+                                <th>Channel</th>
+                                <th>Risk</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="txn-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ TAB 2: FRAUD ALERTS ══════════════════════════════════ -->
+        <div id="tab-alerts" class="tab-content">
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-title">Velocity Attacks</div>
+                    <div class="card-value" id="velocity-count" style="color: var(--orange);">0</div>
+                    <div class="card-subtitle">Rapid-fire card usage detected</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Geo-Hopping</div>
+                    <div class="card-value" id="geohop-count" style="color: var(--red);">0</div>
+                    <div class="card-subtitle">Impossible travel detected</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Amount Anomalies</div>
+                    <div class="card-value" id="anomaly-count" style="color: var(--purple);">0</div>
+                    <div class="card-subtitle">Abnormal transaction amounts</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Cards Blocked</div>
+                    <div class="card-value" id="cards-blocked" style="color: var(--red);">3</div>
+                    <div class="card-subtitle">In Hazelcast hot blocklist</div>
+                </div>
+            </div>
+            <div id="alerts-feed"></div>
+        </div>
+
+        <!-- ═══ TAB 3: STATISTICS ════════════════════════════════════ -->
+        <div id="tab-stats" class="tab-content">
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-title">Risk Distribution</div>
+                    <div style="margin-top: 16px;" id="risk-chart">
+                        <div class="chart-bar">
+                            <div class="chart-label">LOW</div>
+                            <div class="chart-fill risk-low" id="risk-low-bar" style="width: 70%;">70%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">MEDIUM</div>
+                            <div class="chart-fill risk-medium" id="risk-med-bar" style="width: 20%;">20%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">HIGH</div>
+                            <div class="chart-fill risk-high" id="risk-high-bar" style="width: 10%;">10%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Top Countries by Volume</div>
+                    <div style="margin-top: 16px;" id="country-chart">
+                        <div class="chart-bar">
+                            <div class="chart-label">🇺🇸 US</div>
+                            <div class="chart-fill" style="width: 65%;">65%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">🇬🇧 UK</div>
+                            <div class="chart-fill" style="width: 12%;">12%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">🇯🇵 JP</div>
+                            <div class="chart-fill" style="width: 8%;">8%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">🇩🇪 DE</div>
+                            <div class="chart-fill" style="width: 6%;">6%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">🇫🇷 FR</div>
+                            <div class="chart-fill" style="width: 5%;">5%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">Other</div>
+                            <div class="chart-fill" style="width: 4%;">4%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Transaction Channels</div>
+                    <div style="margin-top: 16px;">
+                        <div class="chart-bar">
+                            <div class="chart-label">POS</div>
+                            <div class="chart-fill" style="width: 45%; background: linear-gradient(90deg, #7c3aed, var(--purple));">45%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">ONLINE</div>
+                            <div class="chart-fill" style="width: 30%; background: linear-gradient(90deg, #0891b2, var(--cyan));">30%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">MOBILE</div>
+                            <div class="chart-fill" style="width: 20%; background: linear-gradient(90deg, #059669, var(--green));">20%</div>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-label">ATM</div>
+                            <div class="chart-fill" style="width: 5%; background: linear-gradient(90deg, #d97706, var(--orange));">5%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Hazelcast Blocklist Stats</div>
+                    <div style="margin-top: 16px; line-height: 2;">
+                        <div>Blocked Cards: <strong style="color: var(--red);">3</strong></div>
+                        <div>Avg Lookup Time: <strong style="color: var(--green);">&lt;2ms</strong></div>
+                        <div>Near Cache Hit Rate: <strong style="color: var(--cyan);">94%</strong></div>
+                        <div>Total Lookups: <strong id="total-lookups">0</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ TAB 4: PIPELINE HEALTH ═══════════════════════════════ -->
+        <div id="tab-pipeline" class="tab-content">
+            <div class="pipeline-grid">
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-name">📨 Apache Kafka</div>
+                        <div class="status-dot healthy"></div>
+                    </div>
+                    <div class="service-details">
+                        Topics: 5 (raw, enriched, blocked, alerts, aggregated)<br>
+                        Partitions: 21 total<br>
+                        Consumer Groups: 4<br>
+                        <a href="http://localhost:9092" target="_blank">localhost:9092</a>
+                    </div>
+                </div>
+
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-name">⚡ Hazelcast Cluster</div>
+                        <div class="status-dot healthy"></div>
+                    </div>
+                    <div class="service-details">
+                        Nodes: 2 (hazelcast-1, hazelcast-2)<br>
+                        Maps: hot-card-blocklist, merchant-registry, velocity-counter<br>
+                        Near Cache: Enabled (invalidate-on-change)<br>
+                        <a href="http://localhost:8085" target="_blank">Management Center → :8085</a>
+                    </div>
+                </div>
+
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-name">🔥 Apache Flink</div>
+                        <div class="status-dot healthy"></div>
+                    </div>
+                    <div class="service-details">
+                        Jobs: 4 (velocity, geo-hop, anomaly, aggregation)<br>
+                        TaskManagers: 1 (4 slots)<br>
+                        Checkpointing: Every 30s<br>
+                        <a href="http://localhost:8081" target="_blank">Flink UI → :8081</a>
+                    </div>
+                </div>
+
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-name">🔍 Elasticsearch</div>
+                        <div class="status-dot healthy"></div>
+                    </div>
+                    <div class="service-details">
+                        Indices: transactions-*, fraud-alerts, aggregations-*<br>
+                        ILM Policy: Hot(7d) → Warm(30d) → Delete<br>
+                        Cluster: visa-fraud-cluster (1 node)<br>
+                        <a href="http://localhost:9200" target="_blank">ES API → :9200</a>
+                    </div>
+                </div>
+
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-name">📊 Kibana</div>
+                        <div class="status-dot healthy"></div>
+                    </div>
+                    <div class="service-details">
+                        Dashboards: Transaction Map, Fraud Alerts, Analytics<br>
+                        Data Views: transactions-*, fraud-alerts<br>
+                        <a href="http://localhost:5601" target="_blank">Kibana UI → :5601</a>
+                    </div>
+                </div>
+
+                <div class="service-card">
+                    <div class="service-header">
+                        <div class="service-name">🔄 Logstash</div>
+                        <div class="status-dot healthy"></div>
+                    </div>
+                    <div class="service-details">
+                        Inputs: 4 Kafka topics<br>
+                        Filters: PCI masking, geo_point, enrichment<br>
+                        Outputs: 4 Elasticsearch indices<br>
+                        <a href="http://localhost:9600" target="_blank">Monitoring API → :9600</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ═══════════════════════════════════════════════════════════════════
+    // DASHBOARD SIMULATION — Generates realistic live data
+    // In production, this would connect to the actual API/WebSocket
+    // ═══════════════════════════════════════════════════════════════════
+
+    let totalTxns = 0, totalAlerts = 0, totalBlocked = 0;
+    let approvedCount = 0, suspiciousCount = 0, blockedCount = 0;
+    let velocityAlerts = 0, geoHopAlerts = 0, anomalyAlerts = 0;
+
+    const merchants = ['Amazon.com', 'Walmart', 'Shell Gas', 'Starbucks', 'Apple Store',
+                       'Harrods', 'Tokyo Electronics', 'Berlin Pharmacy', 'Paris Boutique'];
+    const countries = ['US', 'UK', 'JP', 'DE', 'FR', 'AU', 'BR', 'NG', 'RU'];
+    const channels = ['POS', 'ONLINE', 'MOBILE', 'ATM'];
+    const cardTypes = ['VISA_CREDIT', 'VISA_DEBIT'];
+
+    function randomCard() {
+        return '4' + Math.random().toString().slice(2, 5) + 'XXXX' +
+               Math.random().toString().slice(2, 6);
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+        document.getElementById(`tab-${tab}`).classList.add('active');
+    }
+
+    function addTransaction() {
+        const roll = Math.random();
+        let risk, status, riskClass;
+
+        if (roll < 0.03) {
+            risk = 'BLOCKED';
+            status = 'DECLINED';
+            riskClass = 'badge-blocked';
+            blockedCount++;
+            totalBlocked++;
+        } else if (roll < 0.08) {
+            risk = 'HIGH';
+            status = 'FLAGGED';
+            riskClass = 'badge-high';
+            suspiciousCount++;
+        } else if (roll < 0.20) {
+            risk = 'MEDIUM';
+            status = 'APPROVED';
+            riskClass = 'badge-medium';
+            approvedCount++;
+        } else {
+            risk = 'LOW';
+            status = 'APPROVED';
+            riskClass = 'badge-low';
+            approvedCount++;
+        }
+
+        totalTxns++;
+        const amount = risk === 'HIGH'
+            ? (Math.random() * 8000 + 2000).toFixed(2)
+            : (Math.random() * 500 + 5).toFixed(2);
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${new Date().toLocaleTimeString()}</td>
+            <td style="font-family: monospace;">${randomCard()}</td>
+            <td>$${amount}</td>
+            <td>${merchants[Math.floor(Math.random() * merchants.length)]}</td>
+            <td>${countries[Math.floor(Math.random() * countries.length)]}</td>
+            <td>${channels[Math.floor(Math.random() * channels.length)]}</td>
+            <td><span class="badge ${riskClass}">${risk}</span></td>
+            <td><span class="badge ${status === 'APPROVED' ? 'badge-normal' : status === 'FLAGGED' ? 'badge-suspicious' : 'badge-blocked'}">${status}</span></td>
+        `;
+        row.style.animation = 'fadeIn 0.3s ease';
+
+        const tbody = document.getElementById('txn-tbody');
+        tbody.insertBefore(row, tbody.firstChild);
+        if (tbody.children.length > 50) tbody.removeChild(tbody.lastChild);
+
+        // Update counters
+        document.getElementById('total-txns').textContent = totalTxns.toLocaleString();
+        document.getElementById('total-alerts').textContent = totalAlerts;
+        document.getElementById('total-blocked').textContent = totalBlocked;
+        document.getElementById('txn-rate').textContent = Math.floor(8 + Math.random() * 5);
+        document.getElementById('approved-count').textContent = approvedCount;
+        document.getElementById('suspicious-count').textContent = suspiciousCount;
+        document.getElementById('blocked-count').textContent = blockedCount;
+        document.getElementById('avg-latency').textContent = (1 + Math.random() * 3).toFixed(1) + 'ms';
+        document.getElementById('total-lookups').textContent = totalTxns.toLocaleString();
+    }
+
+    function addFraudAlert() {
+        const types = [
+            { type: 'VELOCITY_ATTACK', cls: 'velocity', icon: '⚡', count: ++velocityAlerts,
+              detail: `Card ${randomCard()} — ${5 + Math.floor(Math.random()*10)} transactions in 60 seconds` },
+            { type: 'GEO_HOPPING', cls: 'geo-hop', icon: '🌍', count: ++geoHopAlerts,
+              detail: `Card ${randomCard()} — Used in ${countries[0]} then ${countries[Math.floor(Math.random()*8)+1]} within 10 minutes` },
+            { type: 'AMOUNT_ANOMALY', cls: 'amount', icon: '💰', count: ++anomalyAlerts,
+              detail: `Card ${randomCard()} — $${(5000+Math.random()*15000).toFixed(2)} (${(3+Math.random()*7).toFixed(1)}x avg)` },
+        ];
+
+        const alert = types[Math.floor(Math.random() * types.length)];
+        totalAlerts++;
+
+        const div = document.createElement('div');
+        div.className = `alert-card ${alert.cls}`;
+        div.innerHTML = `
+            <div class="alert-header">
+                <div class="alert-type">${alert.icon} ${alert.type}</div>
+                <span class="badge badge-critical">CRITICAL</span>
+            </div>
+            <div class="alert-details">${alert.detail}<br>
+            <small>Detected at ${new Date().toLocaleTimeString()} | Recommended: BLOCK_CARD</small></div>
+        `;
+
+        const feed = document.getElementById('alerts-feed');
+        feed.insertBefore(div, feed.firstChild);
+        if (feed.children.length > 20) feed.removeChild(feed.lastChild);
+
+        document.getElementById('velocity-count').textContent = velocityAlerts;
+        document.getElementById('geohop-count').textContent = geoHopAlerts;
+        document.getElementById('anomaly-count').textContent = anomalyAlerts;
+        document.getElementById('total-alerts').textContent = totalAlerts;
+    }
+
+    // ─── START SIMULATION ─────────────────────────────────────────
+    setInterval(addTransaction, 200);     // ~5 transactions/second
+    setInterval(addFraudAlert, 5000);     // 1 alert every 5 seconds
+    </script>
+</body>
+</html>

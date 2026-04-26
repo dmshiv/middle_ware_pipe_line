@@ -1,0 +1,12 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Enrichment Service Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+# hazelcast-python-client: Official Hazelcast Python client
+#   WHY: Connects to Hazelcast cluster for blocklist lookups, merchant cache
+#   Supports Near Cache, EntryListeners, distributed maps
+#
+# confluent-kafka: High-performance Kafka client (librdkafka wrapper)
+#   WHY: Faster than kafka-python, used in production at scale
+# ─────────────────────────────────────────────────────────────────────────────
+hazelcast-python-client==5.4.0
+confluent-kafka==2.3.0
